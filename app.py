@@ -1,3 +1,4 @@
+import re
 import streamlit as st
 import speech_recognition as sr
 from sumy.parsers.plaintext import PlaintextParser
@@ -33,21 +34,46 @@ def transcribe_audio(file_path: str) -> str:
         return ""  # API error / no internet
 
 
+def simple_sentence_split(text: str):
+    """
+    Very simple sentence splitter used as a fallback if NLTK-based tokenizer fails.
+    Splits on '.', '!' and '?' followed by whitespace.
+    """
+    sentences = re.split(r'(?<=[.!?])\s+', text.strip())
+    sentences = [s for s in sentences if s]
+    return sentences
+
+
 def summarize_text(text: str, num_sentences: int = 2) -> str:
     """
     Summarize the input text into a shorter version with num_sentences sentences.
-    Uses an LSA-based extractive summarizer from sumy.
+
+    Primary method:
+        - LSA-based extractive summarizer from sumy (requires NLTK tokenizer data).
+    Fallback:
+        - Simple sentence-based summarizer that returns the first N sentences.
     """
     if not text or not text.strip():
         return ""
 
-    parser = PlaintextParser.from_string(text, Tokenizer("english"))
-    summarizer = LsaSummarizer()
+    # Try LSA-based summarization
+    try:
+        parser = PlaintextParser.from_string(text, Tokenizer("english"))
+        summarizer = LsaSummarizer()
 
-    summary_sentences = summarizer(parser.document, num_sentences)
-    summary = " ".join(str(sentence) for sentence in summary_sentences)
-    return summary
+        summary_sentences = summarizer(parser.document, num_sentences)
+        summary = " ".join(str(sentence) for sentence in summary_sentences)
 
+        if summary.strip():
+            return summary
+
+    except LookupError:
+        # NLTK tokenizer data (e.g., punkt) not available on this environment
+        pass
+
+    # Fallback: simple summarization by taking the first N sentences
+    sentences = simple_sentence_split(text)
+    return " ".join(sentences[:num_sentences])
 
 # --- Streamlit app ---
 
@@ -98,4 +124,5 @@ if st.button("Transcribe & Summarize"):
             else:
                 st.write(
                     "Summary could not be generated (possibly due to very short or unclear transcript)."
+
                 )
