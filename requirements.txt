@@ -1,0 +1,4 @@
+speechrecognition
+sumy
+nltk
+pydub
